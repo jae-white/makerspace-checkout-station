@@ -13,13 +13,13 @@ cat > "$desktop_file" <<EOF
 Type=Application
 Name=Makerspace Engineering Console
 Comment=Hardware test and scale calibration
-Exec="$launcher"
+Exec=/bin/bash "$launcher"
 Path="$repo_root"
 Icon=utilities-system-monitor
 Terminal=true
 Categories=Utility;
 EOF
-chmod +x "$desktop_file" "$launcher"
+chmod +x "$desktop_file"
 cp "$desktop_file" "$desktop_dir/Makerspace Engineering Console.desktop"
 chmod +x "$desktop_dir/Makerspace Engineering Console.desktop"
 
