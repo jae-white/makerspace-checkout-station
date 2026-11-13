@@ -4,6 +4,7 @@ import queue
 import tkinter as tk
 import json
 import statistics
+from collections import deque
 from pathlib import Path
 from tkinter import messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
@@ -92,7 +93,7 @@ def scale_worker():
         nau.channel = 1
         nau.gain = 128
 
-        def average(count=20):
+        def average(count=60):
             values = []
             for _ in range(count):
                 deadline = time.monotonic() + 5
@@ -113,6 +114,7 @@ def scale_worker():
             factor = None
 
         zero = average()
+        recent_readings = deque(maxlen=10)
         waiting_for_mass = False
         events.put(("scale_status", "Scale ready; empty tray was tared at startup."))
 
@@ -124,15 +126,18 @@ def scale_worker():
 
             if command == "tare":
                 zero = average()
+                recent_readings.clear()
                 events.put(("scale_status", "Empty tray tared."))
             elif command == "calibrate_zero":
                 zero = average()
+                recent_readings.clear()
                 waiting_for_mass = True
                 events.put(("calibration_zero_done", mass_g))
             elif command == "calibrate_weight":
                 loaded = average()
                 delta = loaded - zero
                 waiting_for_mass = False
+                recent_readings.clear()
                 if abs(delta) < 100:
                     events.put(("error", "Calibration signal too small; check cell wiring and load direction."))
                 else:
@@ -142,11 +147,12 @@ def scale_worker():
                     )
                     events.put(("scale_status", f"Scale calibrated with {mass_g:g} g."))
             elif not waiting_for_mass:
-                reading = average(3)
+                recent_readings.append(average(5))
+                reading = statistics.mean(recent_readings)
                 if factor is None:
-                    text = f"{reading - zero:+.0f} raw counts (uncalibrated)"
+                    text = f"{reading - zero:+.0f} raw counts (averaged, uncalibrated)"
                 else:
-                    text = f"{(reading - zero) / factor:+.3f} g"
+                    text = f"{(reading - zero) / factor:+.3f} g (averaged)"
                 events.put(("scale", text))
             else:
                 time.sleep(0.05)
