@@ -71,7 +71,7 @@ sudo raspi-config
 Install dependencies from the repository root:
 
 ```bash
-sudo apt install python3-venv i2c-tools
+sudo apt install python3-venv python3-tk i2c-tools
 python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
