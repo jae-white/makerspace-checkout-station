@@ -97,7 +97,7 @@ def scale_worker():
             if not nau.calibrate(mode):
                 raise RuntimeError(f"NAU7802 {mode} calibration failed")
 
-        def average(count=60):
+        def read_samples(count):
             values = []
             for _ in range(count):
                 deadline = time.monotonic() + 5
@@ -108,7 +108,10 @@ def scale_worker():
                 if not running:
                     return None
                 values.append(nau.read())
-            return statistics.mean(values)
+            return values
+
+        def average(count=60):
+            return statistics.mean(read_samples(count))
 
         try:
             factor = float(json.loads(CALIBRATION_FILE.read_text())["counts_per_gram"])
@@ -119,7 +122,7 @@ def scale_worker():
 
         average(5)  # Discard readings made during ADC initialization.
         zero = average()
-        recent_readings = deque(maxlen=10)
+        recent_readings = deque(maxlen=50)
         waiting_for_mass = False
         events.put(("scale_status", "Scale ready; empty tray was tared at startup."))
 
@@ -152,13 +155,15 @@ def scale_worker():
                     )
                     events.put(("scale_status", f"Scale calibrated with {mass_g:g} g."))
             elif not waiting_for_mass:
-                recent_readings.append(average(5))
+                samples = read_samples(5)
+                recent_readings.extend(samples)
                 reading = statistics.mean(recent_readings)
                 if factor is None:
-                    text = f"{reading - zero:+.0f} raw counts (averaged, uncalibrated)"
+                    text = f"{reading - zero:+.0f} raw counts (5 s average, uncalibrated)"
                 else:
-                    text = f"{(reading - zero) / factor:+.3f} g ({reading - zero:+.0f} raw counts, averaged)"
-                events.put(("scale", text))
+                    text = f"{(reading - zero) / factor:+.3f} g (5 s average)"
+                raw_text = f"latest {samples[-1] - zero:+.0f}  |  5 s average {reading - zero:+.0f}"
+                events.put(("scale", text, raw_text))
             else:
                 time.sleep(0.05)
 
@@ -264,6 +269,15 @@ scale_label = tk.Label(
 
 scale_label.grid(row=2, column=1, sticky="w", padx=20)
 
+tk.Label(
+    status_frame,
+    text="RAW COUNTS",
+    font=("Arial", 15, "bold")
+).grid(row=3, column=0, sticky="w")
+
+raw_label = tk.Label(status_frame, text="---", font=("Arial", 15))
+raw_label.grid(row=3, column=1, sticky="w", padx=20)
+
 
 def tare_scale():
     messagebox.showinfo("Tare scale", "Remove the parts, leaving the empty tray. Click OK when stable.")
@@ -285,7 +299,7 @@ def calibrate_scale():
 
 
 scale_controls = tk.Frame(status_frame)
-scale_controls.grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
+scale_controls.grid(row=4, column=0, columnspan=2, sticky="w", pady=6)
 tk.Button(scale_controls, text="TARE", command=tare_scale).pack(side="left", padx=(0, 8))
 tk.Button(scale_controls, text="CALIBRATE", command=calibrate_scale).pack(side="left")
 
@@ -413,6 +427,7 @@ def process_events():
                 scale_label.config(
                     text=event[1]
                 )
+                raw_label.config(text=event[2])
 
             elif kind == "calibration_zero_done":
 
