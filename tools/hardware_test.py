@@ -163,13 +163,19 @@ def recovery_pressed():
     events.put(("recovery", "PRESSED"))
 
 
-recovery_button = Button(
-    RECOVERY_GPIO,
-    pull_up=True,
-    bounce_time=0.05
-)
-
-recovery_button.when_pressed = recovery_pressed
+def recovery_worker():
+    try:
+        recovery_button = Button(
+            RECOVERY_GPIO,
+            pull_up=True,
+            bounce_time=0.05
+        )
+        recovery_button.when_pressed = recovery_pressed
+        while running:
+            time.sleep(0.1)
+        recovery_button.close()
+    except Exception as e:
+        events.put(("error", f"Recovery button: {e}"))
 
 
 # ---------------------------------------------------------
@@ -454,6 +460,11 @@ threading.Thread(
 
 threading.Thread(
     target=scale_worker,
+    daemon=True
+).start()
+
+threading.Thread(
+    target=recovery_worker,
     daemon=True
 ).start()
 
