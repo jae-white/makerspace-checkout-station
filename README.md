@@ -66,3 +66,29 @@ Enable I2C:
 
 ```bash
 sudo raspi-config
+```
+
+Install dependencies from the repository root:
+
+```bash
+sudo apt install python3-venv i2c-tools
+python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+i2cdetect -y 1  # Confirm that 2a appears for the NAU7802
+```
+
+## Temporary Scale Calibration
+
+Run the standalone test program on the Raspberry Pi:
+
+```bash
+. .venv/bin/activate
+python tools/scale_test.py
+```
+
+The program tares an empty tray at startup. Press `m` for one reading, `s` for live readings, `t` to tare again, `c` to calibrate with a known mass in grams, or `q` to quit. Raw readings work before gram calibration. The calibration factor is saved locally to `tools/scale_calibration.json`, which is ignored by Git.
+
+For the Adafruit NAU7802, use the load-cell terminals marked `A+`, `A-`, `E+`, and `E-` and verify the wiring against the actual cell. The common Adafruit example is green → `A+`, white → `A-`, red → `E+`, and black → `E-`.
+
+A temporary fixture can reveal whether batches of small parts produce a repeatable change. Calibrate again after the load cell and tray are mounted in the finished enclosure; this program does not establish final scale accuracy on its own.
