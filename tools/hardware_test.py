@@ -235,7 +235,7 @@ recovery_label.grid(row=1, column=1, sticky="w", padx=20)
 # Scale
 tk.Label(
     status_frame,
-    text="LOAD CELL RAW",
+    text="LOAD CELL",
     font=("Arial", 15, "bold")
 ).grid(row=2, column=0, sticky="w")
 
