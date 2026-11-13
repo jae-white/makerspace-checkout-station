@@ -47,13 +47,13 @@ Emergency recovery button:
 
 ## Hardware Test
 
-`hardware_test.py` is a basic integration/smoke test.
+`tools/hardware_test.py` is a basic integration/smoke test with scale tare and calibration controls.
 
 It is intended to verify:
 
 - D-pad input
 - Recovery button input
-- Raw load-cell response
+- Raw load-cell response and calibrated gram readings
 - USB/HID input from card readers and scanners
 - Multiple hardware interfaces operating simultaneously
 - Output on the 5-inch display
@@ -77,6 +77,18 @@ python3 -m venv --system-site-packages .venv
 python -m pip install -r requirements.txt
 i2cdetect -y 1  # Confirm that 2a appears for the NAU7802
 ```
+
+## Engineering Console
+
+On the Raspberry Pi, install a desktop shortcut from the repository root after completing the setup above:
+
+```bash
+bash tools/install_engineering_console_shortcut.sh
+```
+
+Double-click **Makerspace Engineering Console** on the Pi desktop. The console tests the D-pad, recovery button, scale, and USB/HID devices. For the scale, leave the tray empty and press **TARE**; press **CALIBRATE** and follow the prompts with a known mass in grams. Readings show raw counts until calibration is saved, then grams. The calibration factor is stored locally in `tools/scale_calibration.json`.
+
+You can also launch it from the repository root with `bash tools/launch_engineering_console.sh`.
 
 ## Temporary Scale Calibration
 
