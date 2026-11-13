@@ -2,6 +2,10 @@ import time
 import threading
 import queue
 import tkinter as tk
+import json
+import statistics
+from pathlib import Path
+from tkinter import messagebox, simpledialog
 from tkinter.scrolledtext import ScrolledText
 
 from smbus2 import SMBus
@@ -35,7 +39,9 @@ DPAD_BITS = {
 # ---------------------------------------------------------
 
 events = queue.Queue()
+scale_commands = queue.Queue()
 running = True
+CALIBRATION_FILE = Path(__file__).with_name("scale_calibration.json")
 
 
 # ---------------------------------------------------------
@@ -80,23 +86,70 @@ def dpad_worker():
 def scale_worker():
     try:
         i2c = board.I2C()
-
-        nau = NAU7802(
-            i2c,
-            address=0x2A,
-            active_channels=1
-        )
-
-        nau.enable(True)
+        nau = NAU7802(i2c, address=0x2A, active_channels=1)
+        if not nau.enable(True):
+            raise RuntimeError("NAU7802 did not enable")
         nau.channel = 1
+        nau.gain = 128
+
+        def average(count=20):
+            values = []
+            for _ in range(count):
+                deadline = time.monotonic() + 5
+                while running and not nau.available():
+                    if time.monotonic() > deadline:
+                        raise TimeoutError("No NAU7802 reading arrived")
+                    time.sleep(0.01)
+                if not running:
+                    return None
+                values.append(nau.read())
+            return statistics.mean(values)
+
+        try:
+            factor = float(json.loads(CALIBRATION_FILE.read_text())["counts_per_gram"])
+            if factor == 0:
+                factor = None
+        except (FileNotFoundError, KeyError, ValueError, TypeError):
+            factor = None
+
+        zero = average()
+        waiting_for_mass = False
+        events.put(("scale_status", "Scale ready; empty tray was tared at startup."))
 
         while running:
+            try:
+                command, mass_g = scale_commands.get_nowait()
+            except queue.Empty:
+                command, mass_g = None, None
 
-            if nau.available():
-                reading = nau.read()
-                events.put(("scale", str(reading)))
-
-            time.sleep(0.10)
+            if command == "tare":
+                zero = average()
+                events.put(("scale_status", "Empty tray tared."))
+            elif command == "calibrate_zero":
+                zero = average()
+                waiting_for_mass = True
+                events.put(("calibration_zero_done", mass_g))
+            elif command == "calibrate_weight":
+                loaded = average()
+                delta = loaded - zero
+                waiting_for_mass = False
+                if abs(delta) < 100:
+                    events.put(("error", "Calibration signal too small; check cell wiring and load direction."))
+                else:
+                    factor = delta / mass_g
+                    CALIBRATION_FILE.write_text(
+                        json.dumps({"counts_per_gram": factor}, indent=2) + "\n"
+                    )
+                    events.put(("scale_status", f"Scale calibrated with {mass_g:g} g."))
+            elif not waiting_for_mass:
+                reading = average(3)
+                if factor is None:
+                    text = f"{reading - zero:+.0f} raw counts (uncalibrated)"
+                else:
+                    text = f"{(reading - zero) / factor:+.3f} g"
+                events.put(("scale", text))
+            else:
+                time.sleep(0.05)
 
     except Exception as e:
         events.put(("error", f"Scale: {e}"))
@@ -193,6 +246,31 @@ scale_label = tk.Label(
 )
 
 scale_label.grid(row=2, column=1, sticky="w", padx=20)
+
+
+def tare_scale():
+    messagebox.showinfo("Tare scale", "Remove the parts, leaving the empty tray. Click OK when stable.")
+    scale_commands.put(("tare", None))
+
+
+def calibrate_scale():
+    mass_g = simpledialog.askfloat(
+        "Calibrate scale", "Known calibration mass in grams:",
+        parent=root, minvalue=0.001
+    )
+    if mass_g is None:
+        return
+    messagebox.showinfo(
+        "Calibrate scale",
+        "Remove the parts, leaving the empty tray. Click OK when stable."
+    )
+    scale_commands.put(("calibrate_zero", mass_g))
+
+
+scale_controls = tk.Frame(status_frame)
+scale_controls.grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
+tk.Button(scale_controls, text="TARE", command=tare_scale).pack(side="left", padx=(0, 8))
+tk.Button(scale_controls, text="CALIBRATE", command=calibrate_scale).pack(side="left")
 
 
 # HID section
@@ -319,6 +397,20 @@ def process_events():
                     text=event[1]
                 )
 
+            elif kind == "calibration_zero_done":
+
+                mass_g = event[1]
+                messagebox.showinfo(
+                    "Calibrate scale",
+                    f"Put the {mass_g:g} g known weight on the tray. Click OK when stable."
+                )
+                scale_commands.put(("calibrate_weight", mass_g))
+
+            elif kind == "scale_status":
+
+                hid_log.insert("end", f"SCALE: {event[1]}\n")
+                hid_log.see("end")
+
             elif kind == "recovery":
 
                 recovery_label.config(
@@ -372,3 +464,4 @@ check_hid_timeout()
 root.mainloop()
 
 running = False
+
