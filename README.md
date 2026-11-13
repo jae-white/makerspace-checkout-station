@@ -86,7 +86,7 @@ On the Raspberry Pi, install a desktop shortcut from the repository root after c
 bash tools/install_engineering_console_shortcut.sh
 ```
 
-Double-click **Makerspace Engineering Console** on the Pi desktop. The console tests the D-pad, recovery button, scale, and USB/HID devices. For the scale, leave the tray empty and press **TARE**; press **CALIBRATE** and follow the prompts with a known mass in grams. Readings show raw counts until calibration is saved, then grams. The calibration factor is stored locally in `tools/scale_calibration.json`.
+Double-click **Makerspace Engineering Console** on the Pi desktop. The console tests the D-pad, recovery button, scale, and USB/HID devices. For the scale, leave the tray empty and press **TARE**; press **CALIBRATE** and follow the prompts with a known mass in grams. Readings show raw counts until calibration is saved, then grams. The live display averages recent readings, so wait about five seconds after adding or removing a small item before judging the value. The calibration factor is stored locally in `tools/scale_calibration.json`.
 
 You can also launch it from the repository root with `bash tools/launch_engineering_console.sh`.
 
