@@ -92,6 +92,10 @@ def scale_worker():
             raise RuntimeError("NAU7802 did not enable")
         nau.channel = 1
         nau.gain = 128
+        nau.poll_rate = 10
+        for mode in ("INTERNAL", "OFFSET"):
+            if not nau.calibrate(mode):
+                raise RuntimeError(f"NAU7802 {mode} calibration failed")
 
         def average(count=60):
             values = []
@@ -113,6 +117,7 @@ def scale_worker():
         except (FileNotFoundError, KeyError, ValueError, TypeError):
             factor = None
 
+        average(5)  # Discard readings made during ADC initialization.
         zero = average()
         recent_readings = deque(maxlen=10)
         waiting_for_mass = False
@@ -152,7 +157,7 @@ def scale_worker():
                 if factor is None:
                     text = f"{reading - zero:+.0f} raw counts (averaged, uncalibrated)"
                 else:
-                    text = f"{(reading - zero) / factor:+.3f} g (averaged)"
+                    text = f"{(reading - zero) / factor:+.3f} g ({reading - zero:+.0f} raw counts, averaged)"
                 events.put(("scale", text))
             else:
                 time.sleep(0.05)
